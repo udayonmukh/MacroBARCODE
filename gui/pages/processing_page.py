@@ -9,6 +9,7 @@ from gui.frames.process.execution_tab import create_execution_frame
 from gui.frames.process.binarization_tab import create_binarization_frame
 from gui.frames.process.flow_tab import create_flow_frame
 from gui.frames.process.intensity_tab import create_intensity_frame
+from gui.frames.process.segmentation_tab import create_segmentation_frame
 
 from core import BarcodeConfig, InputConfig, PreviewConfig, AggregationConfig
 
@@ -29,11 +30,15 @@ def create_tabs(parent, config, input_config, preview_config):
 
     execution_frame = create_execution_frame(notebook, config, input_config)
     binarization_frame = create_binarization_frame(notebook, config, preview_config, input_config)
+    segmentation_frame = create_segmentation_frame(
+        notebook, config, preview_config, input_config
+    )
     flow_frame = create_flow_frame(notebook, config, preview_config, input_config)
     intensity_frame = create_intensity_frame(notebook, config, preview_config, input_config)
 
     notebook.add(execution_frame, text="Execution Settings")
     notebook.add(binarization_frame, text="Binarization Settings")
+    notebook.add(segmentation_frame, text="Edge Segmentation Settings")
     notebook.add(flow_frame, text="Optical Flow Settings")
     notebook.add(intensity_frame, text="Intensity Distribution Settings")
 

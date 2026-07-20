@@ -84,6 +84,29 @@ The optical flow module takes frames from a video file and calculates the optica
 | Downsample | Controls the interval between pixels that the flow field is sampled at; larger values are less prone to noise but have less precision | (1, 1000) | 8 |
 | Fraction of Frames Evaluated | Used for determining frames for averaging in calculation of speed change; not used for calculation of other optical flow metrics; decreasing this results in fewer frames being used for these averages, at the cost of more sensitivity to noise | (0.01, 0.25) | 0.05 |
 
+### Edge Segmentation Settings
+The Edge Segmentation branch normalizes each selected microscopy frame, applies
+Gaussian denoising and Canny edge detection, closes small gaps, and fills exterior
+contours above a configurable minimum area. Enable it under **Select Branches**.
+
+| Setting Name | Description | Default Value |
+| - | - | - |
+| Canny Lower / Upper Threshold | Hysteresis thresholds used for edge detection | 50 / 150 |
+| Gaussian Blur Kernel | Positive odd denoising kernel size | 5 |
+| Closing Kernel / Iterations | Morphological settings used to bridge edge gaps | 5 / 2 |
+| Minimum Segment Area | Ignore contours smaller than this area in pixels | 100 |
+| Frame Step | Analyze every Nth frame | 10 |
+| Fraction of Frames Evaluated | Beginning/end fraction used for edge-density change | 0.05 |
+
+The summary CSV receives mean and maximum edge density, edge-density change,
+mean segmented area, and mean segment count. With **Save Reduced Data
+Structures** enabled, `SegmentationData.csv` contains the binary edge map,
+segmentation mask, and frame-level measurements for every analyzed frame.
+The settings tab provides a live three-panel preview of the original frame,
+Canny edge map, and filled segmentation mask. Threshold and morphology changes
+are reflected immediately, and the preview reports edge density, segmented area,
+and the number of detected segments for the selected frame.
+
 ### Intensity Distribution Settings
 The intensity distribution module takes frames from a video and creates an intensity distribution histogram. The kurtosis, median skewness, and mode skewness are then calculated from this distribution.
 

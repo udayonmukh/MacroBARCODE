@@ -41,6 +41,13 @@ class Metrics(Enum):
     ISLAND_DISTANCE = "Mean Island Separation"
     ISLAND_CORRELATION = "Structural Correlation Length"
 
+    # Metrics for edge segmentation analysis
+    MEAN_EDGE_DENSITY = "Mean Edge Density"
+    MAX_EDGE_DENSITY = "Maximum Edge Density"
+    EDGE_DENSITY_CHANGE = "Edge Density Change"
+    MEAN_SEGMENTED_AREA = "Mean Segmented Area"
+    MEAN_SEGMENT_COUNT = "Mean Segment Count"
+
     # Physical Units for Binarization Void/Island Metrics
     ISLAND_MAX_AREA_QUANTITY = "Maximum Island Area Quantity"
     VOID_MAX_AREA_QUANTITY = "Maximum Void Area Quantity"

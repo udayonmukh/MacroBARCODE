@@ -194,6 +194,56 @@ class BinarizationConfigGUI:
         self.invert_binarization.set(new_config.invert_binarization)
 
 @dataclass
+class SegmentationConfigGUI:
+    """Auto-generated GUI wrapper for SegmentationConfig"""
+    _core_config: SegmentationConfig = field(default_factory=SegmentationConfig)
+
+    canny_low: tk.IntVar = field(init=False)
+    canny_high: tk.IntVar = field(init=False)
+    blur_kernel: tk.IntVar = field(init=False)
+    close_kernel: tk.IntVar = field(init=False)
+    close_iterations: tk.IntVar = field(init=False)
+    minimum_segment_area: tk.IntVar = field(init=False)
+    frame_step: tk.IntVar = field(init=False)
+    percentage_frames_evaluated: tk.DoubleVar = field(init=False)
+
+    def __post_init__(self):
+        self.canny_low = tk.IntVar(value=self._core_config.canny_low)
+        self.canny_high = tk.IntVar(value=self._core_config.canny_high)
+        self.blur_kernel = tk.IntVar(value=self._core_config.blur_kernel)
+        self.close_kernel = tk.IntVar(value=self._core_config.close_kernel)
+        self.close_iterations = tk.IntVar(value=self._core_config.close_iterations)
+        self.minimum_segment_area = tk.IntVar(value=self._core_config.minimum_segment_area)
+        self.frame_step = tk.IntVar(value=self._core_config.frame_step)
+        self.percentage_frames_evaluated = tk.DoubleVar(value=self._core_config.percentage_frames_evaluated)
+
+    @property
+    def config(self) -> SegmentationConfig:
+        """Get current config from GUI values"""
+        return SegmentationConfig(
+            canny_low=self.canny_low.get(),
+            canny_high=self.canny_high.get(),
+            blur_kernel=self.blur_kernel.get(),
+            close_kernel=self.close_kernel.get(),
+            close_iterations=self.close_iterations.get(),
+            minimum_segment_area=self.minimum_segment_area.get(),
+            frame_step=self.frame_step.get(),
+            percentage_frames_evaluated=self.percentage_frames_evaluated.get(),
+        )
+
+    def update_gui(self, new_config: SegmentationConfig):
+        """Update GUI from new config values"""
+        self._core_config = new_config
+        self.canny_low.set(new_config.canny_low)
+        self.canny_high.set(new_config.canny_high)
+        self.blur_kernel.set(new_config.blur_kernel)
+        self.close_kernel.set(new_config.close_kernel)
+        self.close_iterations.set(new_config.close_iterations)
+        self.minimum_segment_area.set(new_config.minimum_segment_area)
+        self.frame_step.set(new_config.frame_step)
+        self.percentage_frames_evaluated.set(new_config.percentage_frames_evaluated)
+
+@dataclass
 class OpticalFlowConfigGUI:
     """Auto-generated GUI wrapper for OpticalFlowConfig"""
     _core_config: OpticalFlowConfig = field(default_factory=OpticalFlowConfig)
@@ -414,11 +464,13 @@ class ModuleConfigGUI:
     _core_config: ModuleConfig = field(default_factory=ModuleConfig)
 
     image_binarization: tk.BooleanVar = field(init=False)
+    edge_segmentation: tk.BooleanVar = field(init=False)
     optical_flow: tk.BooleanVar = field(init=False)
     intensity_distribution: tk.BooleanVar = field(init=False)
 
     def __post_init__(self):
         self.image_binarization = tk.BooleanVar(value=self._core_config.image_binarization)
+        self.edge_segmentation = tk.BooleanVar(value=self._core_config.edge_segmentation)
         self.optical_flow = tk.BooleanVar(value=self._core_config.optical_flow)
         self.intensity_distribution = tk.BooleanVar(value=self._core_config.intensity_distribution)
 
@@ -427,6 +479,7 @@ class ModuleConfigGUI:
         """Get current config from GUI values"""
         return ModuleConfig(
             image_binarization=self.image_binarization.get(),
+            edge_segmentation=self.edge_segmentation.get(),
             optical_flow=self.optical_flow.get(),
             intensity_distribution=self.intensity_distribution.get(),
         )
@@ -435,6 +488,7 @@ class ModuleConfigGUI:
         """Update GUI from new config values"""
         self._core_config = new_config
         self.image_binarization.set(new_config.image_binarization)
+        self.edge_segmentation.set(new_config.edge_segmentation)
         self.optical_flow.set(new_config.optical_flow)
         self.intensity_distribution.set(new_config.intensity_distribution)
 
@@ -687,6 +741,7 @@ class BarcodeConfigGUI:
 
     channels: ChannelConfigGUI = field(init=False)
     image_binarization_parameters: BinarizationConfigGUI = field(init=False)
+    segmentation_parameters: SegmentationConfigGUI = field(init=False)
     intensity_distribution_parameters: IntensityDistributionConfigGUI = field(init=False)
     modules: ModuleConfigGUI = field(init=False)
     optical_flow_parameters: OpticalFlowConfigGUI = field(init=False)
@@ -696,6 +751,7 @@ class BarcodeConfigGUI:
     def __post_init__(self):
         self.channels = ChannelConfigGUI(self._core_config.channels)
         self.image_binarization_parameters = BinarizationConfigGUI(self._core_config.image_binarization_parameters)
+        self.segmentation_parameters = SegmentationConfigGUI(self._core_config.segmentation_parameters)
         self.intensity_distribution_parameters = IntensityDistributionConfigGUI(self._core_config.intensity_distribution_parameters)
         self.modules = ModuleConfigGUI(self._core_config.modules)
         self.optical_flow_parameters = OpticalFlowConfigGUI(self._core_config.optical_flow_parameters)
@@ -708,6 +764,7 @@ class BarcodeConfigGUI:
         return BarcodeConfig(
             channels=self.channels.config,
             image_binarization_parameters=self.image_binarization_parameters.config,
+            segmentation_parameters=self.segmentation_parameters.config,
             intensity_distribution_parameters=self.intensity_distribution_parameters.config,
             modules=self.modules.config,
             optical_flow_parameters=self.optical_flow_parameters.config,

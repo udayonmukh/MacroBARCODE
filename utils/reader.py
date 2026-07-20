@@ -4,7 +4,15 @@ import nd2, av
 import imageio.v3 as iio
 import numpy as np
 from utils import vprint
-from core import BarcodeConfig, InputConfig, ChannelResults, BinarizationResults, IntensityResults, FlowResults
+from core import (
+    BarcodeConfig,
+    InputConfig,
+    ChannelResults,
+    BinarizationResults,
+    IntensityResults,
+    FlowResults,
+    SegmentationResults,
+)
 
 def check_first_frame_dim(file):
     min_intensity = np.min(file[0])
@@ -75,148 +83,82 @@ def read_file(filepath, count_list, config: BarcodeConfig = None, in_config: Inp
         return file
     
 def read_csv_to_channel_results(filepath: str) -> list[ChannelResults]:
-    """Read results from a CSV file into a list of ChannelResults."""
+    """Read current or legacy BARCODE result CSVs by metric name."""
+    import csv
 
-    def get_value(value_str: str) -> float:
-        """Convert string to float, handling empty strings as NaN."""
-        if value_str == "" or value_str.lower() == "nan":
+    def number(row: dict, name: str) -> float:
+        value = row.get(name, "")
+        if value is None or value == "" or value.lower() == "nan":
             return np.nan
         try:
-            return float(value_str)
+            return float(value)
         except ValueError:
-            # If conversion fails, return NaN
             return np.nan
-
-    expected_headers = ChannelResults.get_headers(just_metrics=False)
-    expected_physical_headers = ChannelResults.get_physical_headers(just_metrics=False)
-    expected_v1_headers = expected_headers[:10] + expected_headers[15:-1]
-
-    v1_header_length = 18 # Channel, 7 Image_Binarization, 6 Intensity_Distribution, 4 Optical_Flow
-    v2_header_length = 26 # Channel, 12 Image_Binarization, 6 Intensity_Distribution, 7 Optical_Flow
-
-    import csv
 
     results = []
     with open(filepath, "r", encoding="utf-8") as csvfile:
-        reader = csv.reader(csvfile)
-        headers = next(reader)
+        reader = csv.DictReader(csvfile)
+        headers = reader.fieldnames or []
+        if headers[:3] != ["File", "Channel", "Flags"]:
+            raise AssertionError(f"CSV headers {headers} do not match BARCODE output")
 
-        assert (
-            (headers == expected_headers) or (headers == expected_physical_headers) or (headers == expected_v1_headers)
-        ), f"CSV headers {headers} do not match expected headers for BARCODE analysis"
-
+        physical = "Maximum Island Area Quantity" in headers
         for row in reader:
-            filename = row[0]
-            flags = row.pop(2)
-            data = [get_value(value) for value in row[1:]]
-            if np.isnan(data[0]):
+            channel = number(row, "Channel")
+            if np.isnan(channel):
                 raise ValueError(f"Invalid channel in row: {row}")
-            if len(data) == v1_header_length:
-                results.append(
-                    ChannelResults(
-                        filepath = filename,
-                        channel=int(data[0]),
-                        total_flags=flags,
-                        binarization=BinarizationResults(
-                            connectivity=data[1],
-                            max_island_size=data[2],
-                            max_void_size=data[3],
-                            max_island_percent_change=data[4],
-                            max_void_percent_change=data[5],
-                            island_size_initial=data[6],
-                            island_size_initial2=data[7],
-                        ),
-                        intensity=IntensityResults(
-                            max_kurtosis=data[8],
-                            max_median_skew=data[9],
-                            max_mode_skew=data[10],
-                            kurtosis_diff=data[11],
-                            median_skew_diff=data[12],
-                            mode_skew_diff=data[13],
-                        ),
-                        flow=FlowResults(
-                            mean_speed=data[14],
-                            delta_speed=data[15],
-                            mean_theta=data[16],
-                            mean_sigma_theta=data[17],
-                        ),
-                    )
-                )
-            elif len(data) == v2_header_length:
-                if headers == expected_headers:
-                    results.append(ChannelResults(
-                        filepath = filename,
-                        channel = int(data[0]),
-                        total_flags=flags,
-                        binarization=BinarizationResults(
-                            connectivity=data[1],
-                            max_island_size=data[2],
-                            max_void_size=data[3],
-                            max_island_percent_change=data[4],
-                            max_void_percent_change=data[5],
-                            island_size_initial=data[6],
-                            island_size_initial2=data[7],
-                            island_anisotropy = data[8],
-                            mean_island_size = data[9],
-                            total_island_size = data[10],
-                            mean_island_separation = data[11],
-                            island_correlation_length = data[12],
-                        ),
-                        intensity=IntensityResults(
-                            max_kurtosis=data[13],
-                            max_median_skew=data[14],
-                            max_mode_skew=data[15],
-                            kurtosis_diff=data[16],
-                            median_skew_diff=data[17],
-                            mode_skew_diff=data[18],
-                        ),
-                        flow=FlowResults(
-                            mean_speed=data[19],
-                            delta_speed=data[20],
-                            mean_theta=data[21],
-                            mean_sigma_theta=data[22],
-                            velocity_correlation_length=data[23],
-                            divergence=data[24],
-                            curl=data[25]
-                        )
-                    ))
-                elif headers == expected_physical_headers:
-                    results.append(
-                        ChannelResults(
-                            filepath=filename,
-                            channel=int(data[0]),
-                            total_flags=flags,
-                            binarization=BinarizationResults(
-                                connectivity=data[1],
-                                max_island_size_quantity=data[2],
-                                max_void_size_quantity=data[3],
-                                max_island_percent_change=data[4],
-                                max_void_percent_change=data[5],
-                                island_size_initial_quantity=data[6],
-                                island_size_initial2_quantity=data[7],
-                                island_anisotropy = data[8],
-                                mean_island_size_quantity = data[9],
-                                total_island_size_quantity = data[10],
-                                mean_island_separation = data[11],
-                                island_correlation_length = data[12],
-                            ),
-                            intensity=IntensityResults(
-                                max_kurtosis=data[13],
-                                max_median_skew=data[14],
-                                max_mode_skew=data[15],
-                                kurtosis_diff=data[16],
-                                median_skew_diff=data[17],
-                                mode_skew_diff=data[18],
-                            ),
-                            flow=FlowResults(
-                                mean_speed=data[19],
-                                delta_speed=data[20],
-                                mean_theta=data[21],
-                                mean_sigma_theta=data[22],
-                                velocity_correlation_length=data[23],
-                                divergence=data[24],
-                                curl=data[25]
-                            )
-                        )
-                    )
+
+            binarization = BinarizationResults(
+                connectivity=number(row, "Connectivity"),
+                max_island_percent_change=number(row, "Maximum Island Area Change"),
+                max_void_percent_change=number(row, "Maximum Void Area Change"),
+                island_anisotropy=number(row, "Mean Island Anisotropy"),
+                mean_island_separation=number(row, "Mean Island Separation"),
+                island_correlation_length=number(row, "Structural Correlation Length"),
+            )
+            if physical:
+                binarization.max_island_size_quantity = number(row, "Maximum Island Area Quantity")
+                binarization.max_void_size_quantity = number(row, "Maximum Void Area Quantity")
+                binarization.island_size_initial_quantity = number(row, "Initial Maximum Island Area Quantity")
+                binarization.island_size_initial2_quantity = number(row, "Initial 2nd Maximum Island Area Quantity")
+                binarization.mean_island_size_quantity = number(row, "Mean Island Area Quantity")
+                binarization.total_island_size_quantity = number(row, "Total Island Area Quantity")
+            else:
+                binarization.max_island_size = number(row, "Maximum Island Area")
+                binarization.max_void_size = number(row, "Maximum Void Area")
+                binarization.island_size_initial = number(row, "Initial Maximum Island Area")
+                binarization.island_size_initial2 = number(row, "Initial 2nd Maximum Island Area")
+                binarization.mean_island_size = number(row, "Mean Island Area")
+                binarization.total_island_size = number(row, "Total Island Area")
+
+            results.append(ChannelResults(
+                filepath=row["File"],
+                channel=int(channel),
+                total_flags=row.get("Flags", "0"),
+                binarization=binarization,
+                intensity=IntensityResults(
+                    max_kurtosis=number(row, "Maximum Kurtosis"),
+                    max_median_skew=number(row, "Maximum Median Skewness"),
+                    max_mode_skew=number(row, "Maximum Mode Skewness"),
+                    kurtosis_diff=number(row, "Kurtosis Change"),
+                    median_skew_diff=number(row, "Median Skewness Change"),
+                    mode_skew_diff=number(row, "Mode Skewness Change"),
+                ),
+                flow=FlowResults(
+                    mean_speed=number(row, "Speed"),
+                    delta_speed=number(row, "Speed Change"),
+                    mean_theta=number(row, "Mean Flow Direction"),
+                    mean_sigma_theta=number(row, "Directional Spread"),
+                    velocity_correlation_length=number(row, "Velocity Correlation Length"),
+                    divergence=number(row, "Divergence"),
+                    curl=number(row, "Curl"),
+                ),
+                segmentation=SegmentationResults(
+                    mean_edge_density=number(row, "Mean Edge Density"),
+                    max_edge_density=number(row, "Maximum Edge Density"),
+                    edge_density_change=number(row, "Edge Density Change"),
+                    mean_segmented_area=number(row, "Mean Segmented Area"),
+                    mean_segment_count=number(row, "Mean Segment Count"),
+                ),
+            ))
     return results

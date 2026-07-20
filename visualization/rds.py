@@ -43,3 +43,19 @@ def write_divergence_curl_rds(csvwriter, frame_pair: tuple[int, int], field_data
     csvwriter.writerows(field_data)
     csvwriter.writerow([])
     return
+
+
+def write_segmentation_rds(
+    csvwriter, edges: np.ndarray, mask: np.ndarray, frame_idx: int, measurements: list
+):
+    """Write edge and labeled-region data in the existing CSV RDS style."""
+    if not csvwriter:
+        return
+    csvwriter.writerow([f"Frame {frame_idx}"])
+    csvwriter.writerow(["edge_density", "segmented_area", "segment_count"])
+    csvwriter.writerow(measurements)
+    csvwriter.writerow(["Edge Map"])
+    csvwriter.writerows(edges)
+    csvwriter.writerow(["Segmentation Mask"])
+    csvwriter.writerows(mask)
+    csvwriter.writerow([])

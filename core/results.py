@@ -277,6 +277,49 @@ class IntensityResults(ResultsBase):
 
 
 @dataclass
+class SegmentationResults(ResultsBase):
+    """Summary measurements from edge-based segmentation."""
+
+    mean_edge_density: float = np.nan
+    max_edge_density: float = np.nan
+    edge_density_change: float = np.nan
+    mean_segmented_area: float = np.nan
+    mean_segment_count: float = np.nan
+
+    @classmethod
+    def get_metrics(cls) -> List[Metrics]:
+        return [
+            Metrics.MEAN_EDGE_DENSITY,
+            Metrics.MAX_EDGE_DENSITY,
+            Metrics.EDGE_DENSITY_CHANGE,
+            Metrics.MEAN_SEGMENTED_AREA,
+            Metrics.MEAN_SEGMENT_COUNT,
+        ]
+
+    @classmethod
+    def get_units(cls) -> List[Units]:
+        return [
+            Units.PERCENT_FOV,
+            Units.PERCENT_FOV,
+            Units.PERCENT_CHANGE,
+            Units.PERCENT_FOV,
+            Units.NONE,
+        ]
+
+    def get_data(self) -> List[float]:
+        return [
+            self.mean_edge_density,
+            self.max_edge_density,
+            self.edge_density_change,
+            self.mean_segmented_area,
+            self.mean_segment_count,
+        ]
+
+    def get_dict_data(self) -> dict:
+        return dict(zip(self.get_metrics(), self.get_data()))
+
+
+@dataclass
 class ChannelResults(ResultsBase):
     """Complete analysis results for a single channel."""
 
@@ -288,6 +331,7 @@ class ChannelResults(ResultsBase):
     binarization: BinarizationResults = field(default_factory=BinarizationResults)
     intensity: IntensityResults = field(default_factory=IntensityResults)
     flow: FlowResults = field(default_factory=FlowResults)
+    segmentation: SegmentationResults = field(default_factory=SegmentationResults)
 
     @classmethod
     def _get_base_headers(cls) -> List[str]:
@@ -304,6 +348,7 @@ class ChannelResults(ResultsBase):
             + BinarizationResults.get_metrics()
             + IntensityResults.get_metrics()
             + FlowResults.get_metrics()
+            + SegmentationResults.get_metrics()
         )
     
     @classmethod
@@ -317,6 +362,7 @@ class ChannelResults(ResultsBase):
             + BinarizationResults.get_physical_metrics()
             + IntensityResults.get_metrics()
             + FlowResults.get_metrics()
+            + SegmentationResults.get_metrics()
         )
     
     @classmethod
@@ -331,6 +377,7 @@ class ChannelResults(ResultsBase):
             + BinarizationResults.get_units()
             + IntensityResults.get_units()
             + FlowResults.get_units()
+            + SegmentationResults.get_units()
         )
     
     def get_physical_units(cls, just_metrics: bool = False) -> List[Units]:
@@ -339,6 +386,7 @@ class ChannelResults(ResultsBase):
             + BinarizationResults.get_physical_units()
             + IntensityResults.get_units()
             + FlowResults.get_units()
+            + SegmentationResults.get_units()
         )
     
     def convert_flags(self) -> str:
@@ -362,6 +410,7 @@ class ChannelResults(ResultsBase):
         data.extend(self.binarization.get_data())
         data.extend(self.intensity.get_data())
         data.extend(self.flow.get_data())
+        data.extend(self.segmentation.get_data())
         return data
     
     def get_physical_data(self, just_metrics: bool = False) -> List[float]:
@@ -372,34 +421,37 @@ class ChannelResults(ResultsBase):
         data.extend(self.binarization.get_physical_data())
         data.extend(self.intensity.get_data())
         data.extend(self.flow.get_data())
+        data.extend(self.segmentation.get_data())
         return data
     
     def get_dict_data(self, just_metrics: bool = False) -> dict:
         binarization_data = self.binarization.get_dict_data()
         intensity_data = self.intensity.get_dict_data()
         flow_data = self.flow.get_dict_data()
+        segmentation_data = self.segmentation.get_dict_data()
         self.total_flags = self.convert_flags()
         if just_metrics:
-            data = binarization_data | intensity_data | flow_data
+            data = binarization_data | intensity_data | flow_data | segmentation_data
         else:
             data = {Metrics.FILEPATH: self.filepath,
                     Metrics.CHANNEL: self.channel,
                     Metrics.FLAGS: self.total_flags}
-            data = data | binarization_data | intensity_data | flow_data
+            data = data | binarization_data | intensity_data | flow_data | segmentation_data
         return data
     
     def get_physical_dict_data(self, just_metrics: bool = False) -> dict:
         binarization_data = self.binarization.get_physical_dict_data()
         intensity_data = self.intensity.get_dict_data()
         flow_data = self.flow.get_dict_data()
+        segmentation_data = self.segmentation.get_dict_data()
         self.total_flags = self.convert_flags()
         if just_metrics:
-            data = binarization_data | intensity_data | flow_data
+            data = binarization_data | intensity_data | flow_data | segmentation_data
         else:
             data = {Metrics.FILEPATH: self.filepath,
                     Metrics.CHANNEL: self.channel,
                     Metrics.FLAGS: self.total_flags}
-            data = data | binarization_data | intensity_data | flow_data
+            data = data | binarization_data | intensity_data | flow_data | segmentation_data
         return data
     
     def to_physical_array(self, **kwargs) -> np.ndarray:
@@ -421,5 +473,4 @@ def sort_channel_results_by_metric(
             return 0.0  # Default for sorting if metric not found
 
     results.sort(key=lambda r: get_metric_value(r, sort_metric))
-
 

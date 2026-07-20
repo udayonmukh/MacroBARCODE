@@ -129,6 +129,7 @@ class ModuleConfig(BaseConfig):
     """Analysis module selection and coordination"""
     
     image_binarization: bool = False
+    edge_segmentation: bool = False
     optical_flow: bool = False
     intensity_distribution: bool = False
     
@@ -159,6 +160,20 @@ class BinarizationConfig(BaseConfig):
 
 
 @dataclass
+class SegmentationConfig(BaseConfig):
+    """Canny edge detection and closed-contour segmentation settings."""
+
+    canny_low: int = 50
+    canny_high: int = 150
+    blur_kernel: int = 5
+    close_kernel: int = 5
+    close_iterations: int = 2
+    minimum_segment_area: int = 100
+    frame_step: int = 10
+    percentage_frames_evaluated: float = 0.05
+
+
+@dataclass
 class OpticalFlowConfig(BaseConfig):
     frame_step: int = 10
     win_size: int = 32
@@ -182,6 +197,7 @@ class AnalysisConfig(BaseConfig):
 class BarcodeConfig(BaseConfig):
     channels: ChannelConfig = field(default_factory=ChannelConfig)
     image_binarization_parameters: BinarizationConfig = field(default_factory=BinarizationConfig)
+    segmentation_parameters: SegmentationConfig = field(default_factory=SegmentationConfig)
     intensity_distribution_parameters: IntensityDistributionConfig = field(default_factory=IntensityDistributionConfig)
     modules: ModuleConfig = field(default_factory=ModuleConfig)
     optical_flow_parameters: OpticalFlowConfig = field(default_factory=OpticalFlowConfig)
@@ -310,6 +326,7 @@ GUI_CONFIG_CLASSES = [
     WriterConfig,
     ChannelConfig,
     BinarizationConfig,
+    SegmentationConfig,
     OpticalFlowConfig,
     IntensityDistributionConfig,
     PreviewConfig,
