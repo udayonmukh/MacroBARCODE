@@ -91,6 +91,9 @@ Canny mode and an optional learned-model plug-in are available. Boundaries are
 derived from the resulting mask; Canny is used only when the mask is empty.
 Enable the branch under **Select Branches**.
 
+The complete equations, units, temporal reductions, and interpretation limits
+are documented in [Mathematics of the BARCODE Mechanics Extension](docs/MECHANICS_MATHEMATICS.md).
+
 | Setting Name | Description | Default Value |
 | - | - | - |
 | Segmentation Method | `adaptive`, `canny`, or optional `model` plug-in | adaptive |
