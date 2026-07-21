@@ -85,27 +85,80 @@ The optical flow module takes frames from a video file and calculates the optica
 | Fraction of Frames Evaluated | Used for determining frames for averaging in calculation of speed change; not used for calculation of other optical flow metrics; decreasing this results in fewer frames being used for these averages, at the cost of more sensitivity to noise | (0.01, 0.25) | 0.05 |
 
 ### Edge Segmentation Settings
-The Edge Segmentation branch normalizes each selected microscopy frame, applies
-Gaussian denoising and Canny edge detection, closes small gaps, and fills exterior
-contours above a configurable minimum area. Enable it under **Select Branches**.
+The Edge Segmentation branch is also the BARCODE mechanics extension. Its default
+MVP uses adaptive local thresholding plus opening/closing morphology. A legacy
+Canny mode and an optional learned-model plug-in are available. Boundaries are
+derived from the resulting mask; Canny is used only when the mask is empty.
+Enable the branch under **Select Branches**.
 
 | Setting Name | Description | Default Value |
 | - | - | - |
-| Canny Lower / Upper Threshold | Hysteresis thresholds used for edge detection | 50 / 150 |
-| Gaussian Blur Kernel | Positive odd denoising kernel size | 5 |
-| Closing Kernel / Iterations | Morphological settings used to bridge edge gaps | 5 / 2 |
+| Segmentation Method | `adaptive`, `canny`, or optional `model` plug-in | adaptive |
+| Adaptive Block Size / C | Local neighborhood and threshold offset | 31 / 5 |
+| Invert Foreground | Segment dark rather than bright features | Off |
+| Canny Lower / Upper Threshold | Fallback/legacy edge thresholds | 50 / 150 |
+| Opening / Closing | Remove noise and bridge gaps in the mask | 3/1 and 5/2 |
 | Minimum Segment Area | Ignore contours smaller than this area in pixels | 100 |
+| Deformation Method | Dense Farneback flow or phase-correlation registration | flow |
+| Strain Tensor | Infinitesimal (`small`) or Green-Lagrange (`finite`) strain | small |
+| Crack Mask Inversion | Skeletonize mask background instead of foreground | Off |
 | Frame Step | Analyze every Nth frame | 10 |
 | Fraction of Frames Evaluated | Beginning/end fraction used for edge-density change | 0.05 |
 
-The summary CSV receives mean and maximum edge density, edge-density change,
-mean segmented area, and mean segment count. With **Save Reduced Data
-Structures** enabled, `SegmentationData.csv` contains the binary edge map,
-segmentation mask, and frame-level measurements for every analyzed frame.
+The mechanics computations and exported evidence are:
+
+| Capability | Computation | Evidence |
+| - | - | - |
+| Segmentation | Adaptive threshold + morphology; optional model plug-in | Mask, confidence, QC |
+| Edge detection | Exterior contours from mask; Canny fallback | Red boundary overlay + contour coordinates |
+| Curvature / curl | Signed contour curvature; signed displacement curl | Signed maps and summaries |
+| Shape change | Area, perimeter, circularity, elongation, angle | Normalized delta time series |
+| Deformation | Optical flow or registration | Displacement vector field |
+| Strain | Displacement gradients, small or finite tensor | `strain_xx`, `strain_yy`, `strain_xy` maps |
+| Crack geometry | Skeleton graph length; width = 2 × distance-to-boundary | Length, contour length, width map, branches, tips and tip motion |
+
+With **Save Reduced Data Structures** enabled, `SegmentationData.csv` contains
+the binary boundary and mask, `MechanicsTimeSeries.csv` contains interpretable
+frame measurements, and `Mechanics Evidence/*.npz` contains lossless compressed
+mask, confidence, contour coordinates, curvature, skeleton, crack-width,
+displacement, curl, and strain maps. Crack width is sampled on the skeleton from
+the Euclidean distance transform, while crack length uses weighted 8-neighbor
+graph paths (unit and diagonal steps). All lengths are converted using the
+configured physical pixel size.
+
+Open an evidence archive with NumPy:
+
+```python
+import numpy as np
+
+with np.load("Mechanics Evidence/frame_00000.npz") as evidence:
+    print(evidence.files)
+    crack_width = evidence["crack_width"]
+    skeleton = evidence["crack_skeleton"]
+    contour_points = evidence["contour_points"]
+    contour_offsets = evidence["contour_offsets"]
+```
+
+`contour_points[contour_offsets[i]:contour_offsets[i + 1]]` reconstructs contour
+`i`. Pair archives contain `displacement`, `curl`, `strain_xx`, `strain_yy`, and
+`strain_xy`. NumPy arrays can be displayed with `matplotlib.pyplot.imshow` or
+converted to CSV with `numpy.savetxt`.
 The settings tab provides a live three-panel preview of the original frame,
-Canny edge map, and filled segmentation mask. Threshold and morphology changes
-are reflected immediately, and the preview reports edge density, segmented area,
-and the number of detected segments for the selected frame.
+mask boundary, and filled segmentation mask. Parameters update immediately, and
+the preview reports QC, shape, curvature, and crack measurements.
+
+#### Optional segmentation model plug-in
+
+Enter a callable as `package.module:function`. It must accept one two-dimensional
+frame and return either `mask` or `(mask, confidence)`. Both arrays must match the
+input frame; confidence values are clipped to `[0, 1]`.
+
+```python
+def segment(frame):
+    mask = my_model.predict(frame) > 0.5
+    confidence = my_model.confidence(frame)
+    return mask, confidence
+```
 
 ### Intensity Distribution Settings
 The intensity distribution module takes frames from a video and creates an intensity distribution histogram. The kurtosis, median skewness, and mode skewness are then calculated from this distribution.
@@ -141,7 +194,7 @@ The intensity distribution module takes frames from a video and creates an inten
 
 # Outputs
 ## Metrics
-Each module contributes 5-12 metrics to the BARCODE analysis. They are described below:
+Each module contributes testable summary metrics to the BARCODE analysis. They are described below:
 ### Binarization Metrics
 The Binarization module uses a binarization threshold (defined [above](#binarization-settings)) to convert each selected frame from a given video from grayscale to 0's and 1's. This binarized image is then segmented into "islands" (a region comprising of only 1's) and "voids" (a region comprising of only 0's). The following metrics are computed with respect to these definitions.
 | Metric | Description  |

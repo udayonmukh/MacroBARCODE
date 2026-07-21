@@ -10,6 +10,12 @@ import numpy as np
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
 
+from analysis.mechanics import (
+    contour_curvature,
+    contour_metrics,
+    crack_metrics,
+    shape_descriptors,
+)
 from analysis.segmentation import segment_frame
 from gui.config import BarcodeConfigGUI, InputConfigGUI, PreviewConfigGUI
 from utils.gui import create_popup
@@ -27,6 +33,57 @@ def create_segmentation_frame(
     preview = preview_config
     inputs = input_config
     row = 0
+
+    tk.Label(frame, text="Segmentation method:").grid(
+        row=row, column=0, sticky="w", padx=5, pady=5
+    )
+    ttk.Combobox(
+        frame,
+        textvariable=settings.method,
+        values=("adaptive", "canny", "model"),
+        state="readonly",
+        width=12,
+    ).grid(row=row, column=1, sticky="w", padx=5, pady=5)
+    row += 1
+
+    tk.Label(frame, text="Model plug-in (module:function):").grid(
+        row=row, column=0, sticky="w", padx=5, pady=5
+    )
+    ttk.Entry(frame, textvariable=settings.model_plugin, width=38).grid(
+        row=row, column=1, columnspan=2, sticky="ew", padx=5, pady=5
+    )
+    row += 1
+
+    tk.Label(frame, text="Adaptive block size:").grid(
+        row=row, column=0, sticky="w", padx=5, pady=5
+    )
+    ttk.Combobox(
+        frame,
+        textvariable=settings.adaptive_block_size,
+        values=tuple(range(3, 102, 2)),
+        state="readonly",
+        width=8,
+    ).grid(row=row, column=1, sticky="w", padx=5, pady=5)
+    row += 1
+
+    tk.Label(frame, text="Adaptive threshold C:").grid(
+        row=row, column=0, sticky="w", padx=5, pady=5
+    )
+    tk.Scale(
+        frame,
+        from_=-32,
+        to=32,
+        resolution=0.5,
+        orient="horizontal",
+        variable=settings.adaptive_c,
+        length=360,
+    ).grid(row=row, column=1, columnspan=2, sticky="ew", padx=5, pady=2)
+    row += 1
+
+    tk.Checkbutton(frame, variable=settings.invert_mask, text="Invert foreground mask").grid(
+        row=row, column=0, columnspan=2, sticky="w", padx=5, pady=4
+    )
+    row += 1
 
     def add_scale(label_text, variable, minimum, maximum, help_text):
         nonlocal row
@@ -62,6 +119,10 @@ def create_segmentation_frame(
     controls = [
         ("Gaussian blur kernel", settings.blur_kernel, tuple(range(1, 32, 2)),
          "Positive odd denoising kernel used before edge detection."),
+        ("Opening kernel", settings.open_kernel, tuple(range(1, 32)),
+         "Morphological kernel used to remove isolated foreground noise."),
+        ("Opening iterations", settings.open_iterations, tuple(range(0, 11)),
+         "Number of morphology passes used to remove small noise."),
         ("Closing kernel", settings.close_kernel, tuple(range(1, 32)),
          "Morphological kernel used to bridge nearby edge gaps."),
         ("Closing iterations", settings.close_iterations, tuple(range(0, 11)),
@@ -118,7 +179,7 @@ def create_segmentation_frame(
     row += 1
 
     tk.Label(frame, text="Original").grid(row=row, column=0, pady=(10, 2))
-    tk.Label(frame, text="Canny edges").grid(row=row, column=1, pady=(10, 2))
+    tk.Label(frame, text="Mask boundary").grid(row=row, column=1, pady=(10, 2))
     tk.Label(frame, text="Filled segments").grid(row=row, column=2, pady=(10, 2))
     row += 1
 
@@ -143,6 +204,48 @@ def create_segmentation_frame(
         anchor="w",
     )
     status.grid(row=row, column=0, columnspan=3, sticky="ew", padx=5, pady=5)
+    row += 1
+
+    tk.Label(frame, text="Deformation method:").grid(
+        row=row, column=0, sticky="w", padx=5, pady=5
+    )
+    ttk.Combobox(
+        frame,
+        textvariable=settings.deformation_method,
+        values=("flow", "registration"),
+        state="readonly",
+        width=12,
+    ).grid(row=row, column=1, sticky="w", padx=5, pady=5)
+    row += 1
+
+    tk.Label(frame, text="Optical-flow window:").grid(
+        row=row, column=0, sticky="w", padx=5, pady=5
+    )
+    ttk.Combobox(
+        frame,
+        textvariable=settings.deformation_window,
+        values=(4, 8, 16, 32, 64, 128),
+        width=8,
+    ).grid(row=row, column=1, sticky="w", padx=5, pady=5)
+    row += 1
+
+    tk.Label(frame, text="Strain tensor:").grid(
+        row=row, column=0, sticky="w", padx=5, pady=5
+    )
+    ttk.Combobox(
+        frame,
+        textvariable=settings.strain_type,
+        values=("small", "finite"),
+        state="readonly",
+        width=12,
+    ).grid(row=row, column=1, sticky="w", padx=5, pady=5)
+    row += 1
+
+    tk.Checkbutton(
+        frame,
+        variable=settings.crack_invert_mask,
+        text="Treat mask background as the crack network",
+    ).grid(row=row, column=0, columnspan=3, sticky="w", padx=5, pady=4)
     row += 1
 
     # These affect batch processing but do not change a single-frame preview.
@@ -182,6 +285,11 @@ def create_segmentation_frame(
         try:
             current_config = settings.config
             edges, mask, measurements = segment_frame(image, current_config)
+            shape = shape_descriptors(mask)
+            _, contours = contour_metrics(mask)
+            _, curvature = contour_curvature(mask)
+            crack_mask = 255 - mask if current_config.crack_invert_mask else mask
+            _, crack = crack_metrics(crack_mask)
         except (tk.TclError, ValueError) as error:
             clear_preview(f"Adjust the segmentation parameters: {error}")
             return
@@ -198,7 +306,14 @@ def create_segmentation_frame(
             text=(
                 f"Edges: {measurements['edge_density']:.2%} of FOV    "
                 f"Segmented: {measurements['segmented_area']:.2%} of FOV    "
-                f"Segments: {measurements['segment_count']}"
+                f"Segments: {measurements['segment_count']}    "
+                f"Confidence/QC: {measurements['confidence']:.2f}/{measurements['qc_score']:.2f}\n"
+                f"Area: {shape['area']:.1f} px²    Perimeter: {shape['perimeter']:.1f} px    "
+                f"Circularity: {shape['circularity']:.3f}    Elongation: {shape['elongation']:.3f}    "
+                f"|Curvature|: {curvature['mean_absolute_curvature']:.4f}    "
+                f"Contours/total length: {int(contours['contour_count'])}/{contours['total_contour_length']:.1f} px    "
+                f"Crack length: {crack['length']:.1f} px    "
+                f"Mean/max width: {crack['mean_width']:.2f}/{crack['max_width']:.2f} px"
             )
         )
 
@@ -258,10 +373,18 @@ def create_segmentation_frame(
     for variable in (
         settings.canny_low,
         settings.canny_high,
+        settings.method,
+        settings.model_plugin,
+        settings.adaptive_block_size,
+        settings.adaptive_c,
+        settings.invert_mask,
         settings.blur_kernel,
+        settings.open_kernel,
+        settings.open_iterations,
         settings.close_kernel,
         settings.close_iterations,
         settings.minimum_segment_area,
+        settings.crack_invert_mask,
     ):
         variable.trace_add("write", schedule_preview)
 

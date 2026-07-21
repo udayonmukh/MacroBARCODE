@@ -48,6 +48,31 @@ class Metrics(Enum):
     MEAN_SEGMENTED_AREA = "Mean Segmented Area"
     MEAN_SEGMENT_COUNT = "Mean Segment Count"
 
+    # Metrics for the mechanics extension
+    SEGMENTATION_CONFIDENCE = "Segmentation Confidence"
+    SEGMENTATION_QC = "Segmentation QC Score"
+    MEAN_ABSOLUTE_CURVATURE = "Mean Absolute Curvature"
+    MAX_ABSOLUTE_CURVATURE = "Maximum Absolute Curvature"
+    SHAPE_AREA_CHANGE = "Shape Area Change"
+    SHAPE_PERIMETER_CHANGE = "Shape Perimeter Change"
+    SHAPE_CIRCULARITY_CHANGE = "Shape Circularity Change"
+    SHAPE_ELONGATION_CHANGE = "Shape Elongation Change"
+    SHAPE_ANGLE_CHANGE = "Shape Angle Change"
+    MEAN_DISPLACEMENT = "Mean Displacement"
+    MAX_DISPLACEMENT = "Maximum Displacement"
+    MECHANICS_CURL = "Mechanics Curl"
+    MEAN_STRAIN_XX = "Mean Strain XX"
+    MEAN_STRAIN_YY = "Mean Strain YY"
+    MEAN_STRAIN_XY = "Mean Strain XY"
+    MAX_CRACK_LENGTH = "Maximum Crack Length"
+    CRACK_LENGTH_CHANGE = "Crack Length Change"
+    MAX_CRACK_BRANCHES = "Maximum Crack Branch Count"
+    MEAN_CRACK_TIP_DISPLACEMENT = "Mean Crack Tip Displacement"
+    MEAN_CONTOUR_LENGTH = "Mean Contour Length"
+    TOTAL_CONTOUR_LENGTH = "Total Contour Length"
+    MEAN_CRACK_WIDTH = "Mean Crack Width"
+    MAX_CRACK_WIDTH = "Maximum Crack Width"
+
     # Physical Units for Binarization Void/Island Metrics
     ISLAND_MAX_AREA_QUANTITY = "Maximum Island Area Quantity"
     VOID_MAX_AREA_QUANTITY = "Maximum Void Area Quantity"
@@ -90,6 +115,7 @@ class Units(UnitsNum):
     PERCENT_FRAMES: str = "% of Frames"
     LENGTH: str = "μm"
     AREA: str = "μm^2"
+    INVERSE_LENGTH: str = "1/μm"
 
 
 def get_data_limits(
@@ -141,7 +167,7 @@ def get_data_limits(
                 limits.append(direction_static_limits)
         elif unit == Units.PERCENT_CHANGE:
             limits.append(dynamic_limits(data[:, i], 1))
-        elif unit in [Units.SPEED, Units.LENGTH, Units.AREA]:
+        elif unit in [Units.SPEED, Units.LENGTH, Units.AREA, Units.INVERSE_LENGTH]:
             if metric == Metrics.DELTA_SPEED:
                 limits.append(dynamic_limits(data[:, i], 0))
             else:

@@ -12,6 +12,7 @@ from core import (
     IntensityResults,
     FlowResults,
     SegmentationResults,
+    MechanicsResults,
 )
 
 def check_first_frame_dim(file):
@@ -159,6 +160,31 @@ def read_csv_to_channel_results(filepath: str) -> list[ChannelResults]:
                     edge_density_change=number(row, "Edge Density Change"),
                     mean_segmented_area=number(row, "Mean Segmented Area"),
                     mean_segment_count=number(row, "Mean Segment Count"),
+                ),
+                mechanics=MechanicsResults(
+                    segmentation_confidence=number(row, "Segmentation Confidence"),
+                    segmentation_qc=number(row, "Segmentation QC Score"),
+                    mean_absolute_curvature=number(row, "Mean Absolute Curvature"),
+                    max_absolute_curvature=number(row, "Maximum Absolute Curvature"),
+                    area_change=number(row, "Shape Area Change"),
+                    perimeter_change=number(row, "Shape Perimeter Change"),
+                    circularity_change=number(row, "Shape Circularity Change"),
+                    elongation_change=number(row, "Shape Elongation Change"),
+                    angle_change=number(row, "Shape Angle Change"),
+                    mean_displacement=number(row, "Mean Displacement"),
+                    max_displacement=number(row, "Maximum Displacement"),
+                    mean_curl=number(row, "Mechanics Curl"),
+                    mean_strain_xx=number(row, "Mean Strain XX"),
+                    mean_strain_yy=number(row, "Mean Strain YY"),
+                    mean_strain_xy=number(row, "Mean Strain XY"),
+                    max_crack_length=number(row, "Maximum Crack Length"),
+                    crack_length_change=number(row, "Crack Length Change"),
+                    max_crack_branches=number(row, "Maximum Crack Branch Count"),
+                    mean_crack_tip_displacement=number(row, "Mean Crack Tip Displacement"),
+                    mean_contour_length=number(row, "Mean Contour Length"),
+                    total_contour_length=number(row, "Total Contour Length"),
+                    mean_crack_width=number(row, "Mean Crack Width"),
+                    max_crack_width=number(row, "Maximum Crack Width"),
                 ),
             ))
     return results

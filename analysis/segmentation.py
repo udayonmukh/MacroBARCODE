@@ -1,7 +1,8 @@
-"""Canny edge detection and closed-contour segmentation for microscopy videos."""
+"""Mask-first segmentation and BARCODE mechanics orchestration."""
 
 from __future__ import annotations
 
+import csv
 import os
 from typing import Optional, Tuple
 
@@ -9,127 +10,273 @@ import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 
-from core import SegmentationConfig, SegmentationResults, WriterConfig
+from analysis.mechanics import (
+    as_uint8,
+    boundary_from_mask,
+    boundary_overlay,
+    contour_curvature,
+    contour_metrics,
+    crack_metrics,
+    curl_map,
+    displacement_field,
+    load_model_plugin,
+    normalized_shape_change,
+    pack_contours,
+    segment_mask,
+    segmentation_qc,
+    shape_descriptors,
+    strain_tensor,
+    track_crack_tips,
+    validate_config,
+)
+from core import (
+    MechanicsResults,
+    ReaderConfig,
+    SegmentationConfig,
+    SegmentationResults,
+    WriterConfig,
+)
 from utils import find_analysis_frames, vprint
 from utils.setup import setup_csv_writer
 
 
-def _as_uint8(frame: np.ndarray) -> np.ndarray:
-    """Convert integer or floating microscopy data to OpenCV-compatible uint8."""
-    data = np.asarray(frame)
-    if data.ndim != 2:
-        raise ValueError("Segmentation expects a two-dimensional channel frame")
-    finite = np.nan_to_num(data, nan=0.0, posinf=0.0, neginf=0.0)
-    if finite.dtype == np.uint8:
-        return finite
-    low, high = np.percentile(finite, (0.5, 99.5))
-    if high <= low:
-        return np.zeros(finite.shape, dtype=np.uint8)
-    scaled = np.clip((finite - low) * (255.0 / (high - low)), 0, 255)
-    return scaled.astype(np.uint8)
-
-
-def _validate_config(config: SegmentationConfig) -> None:
-    if not 0 <= config.canny_low < config.canny_high:
-        raise ValueError("Canny thresholds must satisfy 0 <= low < high")
-    if config.blur_kernel < 1 or config.blur_kernel % 2 == 0:
-        raise ValueError("Segmentation blur kernel must be a positive odd number")
-    if config.close_kernel < 1:
-        raise ValueError("Segmentation closing kernel must be positive")
-    if config.close_iterations < 0 or config.minimum_segment_area < 0:
-        raise ValueError("Segmentation iterations and minimum area cannot be negative")
-
-
 def detect_edges(frame: np.ndarray, config: SegmentationConfig) -> np.ndarray:
-    """Normalize, denoise, and apply Canny edge detection to one frame."""
-    _validate_config(config)
-    normalized = _as_uint8(frame)
-    blurred = cv2.GaussianBlur(
-        normalized, (config.blur_kernel, config.blur_kernel), sigmaX=0
+    """Return the mask contour, using Canny only if segmentation is empty."""
+    mask, _ = segment_mask(frame, config)
+    boundary, _ = boundary_from_mask(
+        mask, frame, config.canny_low, config.canny_high
     )
-    return cv2.Canny(blurred, config.canny_low, config.canny_high)
+    return boundary
 
 
 def segment_frame(
     frame: np.ndarray, config: SegmentationConfig
 ) -> Tuple[np.ndarray, np.ndarray, dict]:
-    """Convert edges into a filled binary mask and frame-level measurements."""
-    edges = detect_edges(frame, config)
-    kernel = cv2.getStructuringElement(
-        cv2.MORPH_ELLIPSE, (config.close_kernel, config.close_kernel)
+    """Segment one frame and return boundary, mask, and QC-safe measurements."""
+    mask, confidence = segment_mask(frame, config)
+    boundary, fallback = boundary_from_mask(
+        mask, frame, config.canny_low, config.canny_high
     )
-    closed = cv2.morphologyEx(
-        edges, cv2.MORPH_CLOSE, kernel, iterations=config.close_iterations
-    )
-    contours, _ = cv2.findContours(closed, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    contours = [
-        contour
-        for contour in contours
-        if cv2.contourArea(contour) >= config.minimum_segment_area
-    ]
-    mask = np.zeros_like(edges)
-    if contours:
-        cv2.drawContours(mask, contours, -1, 255, cv2.FILLED)
-    pixel_count = mask.size
+    qc = segmentation_qc(mask, confidence, fallback)
     measurements = {
-        "edge_density": float(np.count_nonzero(edges) / pixel_count),
-        "segmented_area": float(np.count_nonzero(mask) / pixel_count),
-        "segment_count": len(contours),
+        "edge_density": float(np.count_nonzero(boundary) / boundary.size),
+        "segmented_area": float(np.count_nonzero(mask) / mask.size),
+        "segment_count": int(qc["component_count"]),
+        **qc,
     }
-    return edges, mask, measurements
+    return boundary, mask, measurements
+
+
+def _last(series: np.ndarray) -> float:
+    finite = series[np.isfinite(series)]
+    return float(finite[-1]) if len(finite) else np.nan
+
+
+def _mean(values: list[float]) -> float:
+    array = np.asarray(values, dtype=float)
+    return float(np.nanmean(array)) if np.isfinite(array).any() else np.nan
+
+
+def _max(values: list[float]) -> float:
+    array = np.asarray(values, dtype=float)
+    return float(np.nanmax(array)) if np.isfinite(array).any() else np.nan
 
 
 def analyze_segmentation(
     video: np.ndarray,
     name: str,
     config: SegmentationConfig,
+    reader_config: ReaderConfig,
     out_config: WriterConfig,
-) -> Tuple[Optional[plt.Figure], SegmentationResults]:
-    """Analyze selected frames and convert edge data into BARCODE metrics."""
-    vprint("Beginning Edge Segmentation Analysis")
-    _validate_config(config)
+) -> Tuple[Optional[plt.Figure], SegmentationResults, MechanicsResults]:
+    """Compute segmentation and mechanics metrics plus auditable evidence maps."""
+    vprint("Beginning Segmentation and Mechanics Analysis")
+    validate_config(config)
     frame_indices, _ = find_analysis_frames(video, config.frame_step)
     if len(frame_indices) == 0:
-        return None, SegmentationResults()
+        return None, SegmentationResults(), MechanicsResults()
 
-    csvwriter = csvfile = None
+    plugin = load_model_plugin(config.model_plugin) if config.method == "model" else None
+    pixel_size = float(reader_config.um_pixel_ratio)
+    evidence_dir = os.path.join(name, "Mechanics Evidence")
+    if out_config.save_rds:
+        os.makedirs(evidence_dir, exist_ok=True)
+
+    rds_writer = rds_file = None
+    series_file = None
+    series_writer = None
     if out_config.save_rds:
         from visualization import write_segmentation_rds
 
-        csvwriter, csvfile = setup_csv_writer(os.path.join(name, "SegmentationData.csv"))
+        rds_writer, rds_file = setup_csv_writer(os.path.join(name, "SegmentationData.csv"))
+        series_file = open(
+            os.path.join(name, "MechanicsTimeSeries.csv"), "w", newline="", encoding="utf-8"
+        )
+        series_writer = csv.DictWriter(
+            series_file,
+            fieldnames=[
+                "frame", "confidence", "qc_score", "foreground_fraction",
+                "component_count", "canny_fallback", "area", "perimeter",
+                "circularity", "elongation", "angle", "mean_signed_curvature",
+                "mean_absolute_curvature", "max_absolute_curvature", "crack_length",
+                "crack_longest_path", "crack_branches", "crack_tips",
+                "mean_crack_width", "max_crack_width", "contour_count",
+                "mean_contour_length", "total_contour_length", "max_contour_length",
+            ],
+        )
+        series_writer.writeheader()
 
-    edge_density = []
-    segmented_area = []
-    segment_count = []
-    save_spots = {int(frame_indices[0]), int(frame_indices[len(frame_indices) // 2]), int(frame_indices[-1])}
+    edge_density: list[float] = []
+    segmented_area: list[float] = []
+    segment_count: list[float] = []
+    confidence_values: list[float] = []
+    qc_values: list[float] = []
+    curvature_mean: list[float] = []
+    curvature_max: list[float] = []
+    shapes: list[dict[str, float]] = []
+    cracks: list[dict] = []
+    contour_records: list[dict[str, float]] = []
+    masks: list[np.ndarray] = []
+    tips: list[list[tuple[int, int]]] = []
+    save_spots = {
+        int(frame_indices[0]),
+        int(frame_indices[len(frame_indices) // 2]),
+        int(frame_indices[-1]),
+    }
 
     for frame_idx in frame_indices:
-        edges, mask, values = segment_frame(video[frame_idx], config)
-        edge_density.append(values["edge_density"])
-        segmented_area.append(values["segmented_area"])
-        segment_count.append(values["segment_count"])
+        frame = video[int(frame_idx)]
+        mask, confidence = segment_mask(frame, config, plugin)
+        boundary, fallback = boundary_from_mask(
+            mask, frame, config.canny_low, config.canny_high
+        )
+        qc = segmentation_qc(mask, confidence, fallback)
+        curvature, curvature_stats = contour_curvature(mask, pixel_size)
+        contours, contour_stats = contour_metrics(mask, pixel_size)
+        contour_points, contour_offsets = pack_contours(contours)
+        shape = shape_descriptors(mask, pixel_size)
+        crack_mask = cv2.bitwise_not(mask) if config.crack_invert_mask else mask
+        skeleton, crack = crack_metrics(crack_mask, pixel_size)
+        overlay = boundary_overlay(frame, boundary)
 
-        if out_config.save_rds:
+        masks.append(mask)
+        shapes.append(shape)
+        cracks.append(crack)
+        contour_records.append(contour_stats)
+        tips.append(crack["tips"])
+        edge_density.append(float(np.count_nonzero(boundary) / boundary.size))
+        segmented_area.append(float(np.count_nonzero(mask) / mask.size))
+        segment_count.append(qc["component_count"])
+        confidence_values.append(qc["confidence"])
+        qc_values.append(qc["qc_score"])
+        curvature_mean.append(curvature_stats["mean_absolute_curvature"])
+        curvature_max.append(curvature_stats["max_absolute_curvature"])
+
+        if rds_writer:
+            from visualization import write_segmentation_rds
+
             write_segmentation_rds(
-                csvwriter,
-                (edges > 0).astype(np.uint8),
+                rds_writer,
+                (boundary > 0).astype(np.uint8),
                 (mask > 0).astype(np.uint8),
                 int(frame_idx),
-                [values["edge_density"], values["segmented_area"], values["segment_count"]],
+                [edge_density[-1], segmented_area[-1], segment_count[-1]],
+            )
+            np.savez_compressed(
+                os.path.join(evidence_dir, f"frame_{int(frame_idx):05d}.npz"),
+                mask=(mask > 0).astype(np.uint8),
+                confidence=confidence.astype(np.float32),
+                boundary=(boundary > 0).astype(np.uint8),
+                curvature=curvature,
+                crack_skeleton=skeleton,
+                crack_width=crack["width_map"],
+                contour_points=contour_points,
+                contour_offsets=contour_offsets,
+            )
+            series_writer.writerow(
+                {
+                    "frame": int(frame_idx),
+                    **{key: qc[key] for key in (
+                        "confidence", "qc_score", "foreground_fraction", "component_count", "canny_fallback"
+                    )},
+                    **shape,
+                    **curvature_stats,
+                    "crack_length": crack["length"],
+                    "crack_longest_path": crack["longest_path"],
+                    "crack_branches": crack["branch_count"],
+                    "crack_tips": crack["tip_count"],
+                    "mean_crack_width": crack["mean_width"],
+                    "max_crack_width": crack["max_width"],
+                    **contour_stats,
+                }
             )
         if out_config.save_visualizations and int(frame_idx) in save_spots:
             from visualization import save_segmentation_visualization
 
-            save_segmentation_visualization(video[frame_idx], edges, mask, int(frame_idx), name)
+            save_segmentation_visualization(frame, boundary, mask, int(frame_idx), name)
+            cv2.imwrite(
+                os.path.join(name, f"Boundary Overlay Frame {int(frame_idx)}.png"),
+                cv2.cvtColor(overlay, cv2.COLOR_RGB2BGR),
+            )
 
-    if csvfile:
-        csvfile.close()
+    displacement_means: list[float] = []
+    displacement_maxima: list[float] = []
+    curl_means: list[float] = []
+    strain_xx: list[float] = []
+    strain_yy: list[float] = []
+    strain_xy: list[float] = []
+    tip_displacements: list[float] = []
 
-    edge_values = np.asarray(edge_density, dtype=float)
+    for pair_index in range(len(frame_indices) - 1):
+        start, stop = int(frame_indices[pair_index]), int(frame_indices[pair_index + 1])
+        displacement = displacement_field(
+            video[start],
+            video[stop],
+            method=config.deformation_method,
+            window_size=config.deformation_window,
+            pixel_size=pixel_size,
+        )
+        curl = curl_map(displacement, spacing=pixel_size)
+        exx, eyy, exy = strain_tensor(
+            displacement,
+            spacing=pixel_size,
+            finite=config.strain_type == "finite",
+        )
+        magnitude = np.linalg.norm(displacement, axis=2)
+        tip_track = track_crack_tips(tips[pair_index], tips[pair_index + 1], pixel_size)
+        displacement_means.append(float(np.mean(magnitude)))
+        displacement_maxima.append(float(np.max(magnitude)))
+        curl_means.append(float(np.mean(curl)))
+        strain_xx.append(float(np.mean(exx)))
+        strain_yy.append(float(np.mean(eyy)))
+        strain_xy.append(float(np.mean(exy)))
+        tip_displacements.append(tip_track["mean_tip_displacement"])
+        if out_config.save_rds:
+            np.savez_compressed(
+                os.path.join(evidence_dir, f"pair_{start:05d}_{stop:05d}.npz"),
+                displacement=displacement,
+                curl=curl,
+                strain_xx=exx,
+                strain_yy=eyy,
+                strain_xy=exy,
+            )
+
+    for handle in (rds_file, series_file):
+        if handle:
+            handle.close()
+
+    edge_values = np.asarray(edge_density)
     eval_count = max(1, int(np.ceil(len(edge_values) * config.percentage_frames_evaluated)))
-    initial = float(np.mean(edge_values[:eval_count]))
-    final = float(np.mean(edge_values[-eval_count:]))
-    edge_change = final / initial if initial > 0 else np.nan
+    initial_edge = float(np.mean(edge_values[:eval_count]))
+    final_edge = float(np.mean(edge_values[-eval_count:]))
+    edge_change = final_edge / initial_edge if initial_edge > 0 else np.nan
+    changes = normalized_shape_change(shapes)
+    crack_lengths = np.asarray([item["length"] for item in cracks], dtype=float)
+    crack_change = (
+        (crack_lengths[-1] - crack_lengths[0]) / abs(crack_lengths[0])
+        if len(crack_lengths) and crack_lengths[0] > 0
+        else np.nan
+    )
 
     fig = None
     if out_config.save_visualizations:
@@ -139,10 +286,36 @@ def analyze_segmentation(
             np.asarray(frame_indices), edge_values, np.asarray(segmented_area)
         )
 
-    return fig, SegmentationResults(
+    segmentation_results = SegmentationResults(
         mean_edge_density=float(np.mean(edge_values)),
         max_edge_density=float(np.max(edge_values)),
         edge_density_change=edge_change,
         mean_segmented_area=float(np.mean(segmented_area)),
         mean_segment_count=float(np.mean(segment_count)),
     )
+    mechanics_results = MechanicsResults(
+        segmentation_confidence=_mean(confidence_values),
+        segmentation_qc=_mean(qc_values),
+        mean_absolute_curvature=_mean(curvature_mean),
+        max_absolute_curvature=_max(curvature_max),
+        area_change=_last(changes["area"]),
+        perimeter_change=_last(changes["perimeter"]),
+        circularity_change=_last(changes["circularity"]),
+        elongation_change=_last(changes["elongation"]),
+        angle_change=_last(changes["angle"]),
+        mean_displacement=_mean(displacement_means),
+        max_displacement=_max(displacement_maxima),
+        mean_curl=_mean(curl_means),
+        mean_strain_xx=_mean(strain_xx),
+        mean_strain_yy=_mean(strain_yy),
+        mean_strain_xy=_mean(strain_xy),
+        max_crack_length=_max(crack_lengths.tolist()),
+        crack_length_change=float(crack_change),
+        max_crack_branches=_max([item["branch_count"] for item in cracks]),
+        mean_crack_tip_displacement=_mean(tip_displacements),
+        mean_contour_length=_mean([item["mean_contour_length"] for item in contour_records]),
+        total_contour_length=_max([item["total_contour_length"] for item in contour_records]),
+        mean_crack_width=_mean([item["mean_width"] for item in cracks]),
+        max_crack_width=_max([item["max_width"] for item in cracks]),
+    )
+    return fig, segmentation_results, mechanics_results

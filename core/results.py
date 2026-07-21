@@ -320,6 +320,104 @@ class SegmentationResults(ResultsBase):
 
 
 @dataclass
+class MechanicsResults(ResultsBase):
+    """Summary results for mask, contour, deformation, strain, and crack evidence."""
+
+    segmentation_confidence: float = np.nan
+    segmentation_qc: float = np.nan
+    mean_absolute_curvature: float = np.nan
+    max_absolute_curvature: float = np.nan
+    area_change: float = np.nan
+    perimeter_change: float = np.nan
+    circularity_change: float = np.nan
+    elongation_change: float = np.nan
+    angle_change: float = np.nan
+    mean_displacement: float = np.nan
+    max_displacement: float = np.nan
+    mean_curl: float = np.nan
+    mean_strain_xx: float = np.nan
+    mean_strain_yy: float = np.nan
+    mean_strain_xy: float = np.nan
+    max_crack_length: float = np.nan
+    crack_length_change: float = np.nan
+    max_crack_branches: float = np.nan
+    mean_crack_tip_displacement: float = np.nan
+    mean_contour_length: float = np.nan
+    total_contour_length: float = np.nan
+    mean_crack_width: float = np.nan
+    max_crack_width: float = np.nan
+
+    @classmethod
+    def get_metrics(cls) -> List[Metrics]:
+        return [
+            Metrics.SEGMENTATION_CONFIDENCE,
+            Metrics.SEGMENTATION_QC,
+            Metrics.MEAN_ABSOLUTE_CURVATURE,
+            Metrics.MAX_ABSOLUTE_CURVATURE,
+            Metrics.SHAPE_AREA_CHANGE,
+            Metrics.SHAPE_PERIMETER_CHANGE,
+            Metrics.SHAPE_CIRCULARITY_CHANGE,
+            Metrics.SHAPE_ELONGATION_CHANGE,
+            Metrics.SHAPE_ANGLE_CHANGE,
+            Metrics.MEAN_DISPLACEMENT,
+            Metrics.MAX_DISPLACEMENT,
+            Metrics.MECHANICS_CURL,
+            Metrics.MEAN_STRAIN_XX,
+            Metrics.MEAN_STRAIN_YY,
+            Metrics.MEAN_STRAIN_XY,
+            Metrics.MAX_CRACK_LENGTH,
+            Metrics.CRACK_LENGTH_CHANGE,
+            Metrics.MAX_CRACK_BRANCHES,
+            Metrics.MEAN_CRACK_TIP_DISPLACEMENT,
+            Metrics.MEAN_CONTOUR_LENGTH,
+            Metrics.TOTAL_CONTOUR_LENGTH,
+            Metrics.MEAN_CRACK_WIDTH,
+            Metrics.MAX_CRACK_WIDTH,
+        ]
+
+    @classmethod
+    def get_units(cls) -> List[Units]:
+        return [
+            Units.NONE, Units.NONE, Units.INVERSE_LENGTH, Units.INVERSE_LENGTH,
+            Units.PERCENT_CHANGE, Units.PERCENT_CHANGE, Units.PERCENT_CHANGE,
+            Units.PERCENT_CHANGE, Units.PERCENT_CHANGE, Units.LENGTH, Units.LENGTH,
+            Units.NONE, Units.NONE, Units.NONE, Units.NONE, Units.LENGTH,
+            Units.PERCENT_CHANGE, Units.NONE, Units.LENGTH,
+            Units.LENGTH, Units.LENGTH, Units.LENGTH, Units.LENGTH,
+        ]
+
+    def get_data(self) -> List[float]:
+        return [
+            self.segmentation_confidence,
+            self.segmentation_qc,
+            self.mean_absolute_curvature,
+            self.max_absolute_curvature,
+            self.area_change,
+            self.perimeter_change,
+            self.circularity_change,
+            self.elongation_change,
+            self.angle_change,
+            self.mean_displacement,
+            self.max_displacement,
+            self.mean_curl,
+            self.mean_strain_xx,
+            self.mean_strain_yy,
+            self.mean_strain_xy,
+            self.max_crack_length,
+            self.crack_length_change,
+            self.max_crack_branches,
+            self.mean_crack_tip_displacement,
+            self.mean_contour_length,
+            self.total_contour_length,
+            self.mean_crack_width,
+            self.max_crack_width,
+        ]
+
+    def get_dict_data(self) -> dict:
+        return dict(zip(self.get_metrics(), self.get_data()))
+
+
+@dataclass
 class ChannelResults(ResultsBase):
     """Complete analysis results for a single channel."""
 
@@ -332,6 +430,7 @@ class ChannelResults(ResultsBase):
     intensity: IntensityResults = field(default_factory=IntensityResults)
     flow: FlowResults = field(default_factory=FlowResults)
     segmentation: SegmentationResults = field(default_factory=SegmentationResults)
+    mechanics: MechanicsResults = field(default_factory=MechanicsResults)
 
     @classmethod
     def _get_base_headers(cls) -> List[str]:
@@ -349,6 +448,7 @@ class ChannelResults(ResultsBase):
             + IntensityResults.get_metrics()
             + FlowResults.get_metrics()
             + SegmentationResults.get_metrics()
+            + MechanicsResults.get_metrics()
         )
     
     @classmethod
@@ -363,6 +463,7 @@ class ChannelResults(ResultsBase):
             + IntensityResults.get_metrics()
             + FlowResults.get_metrics()
             + SegmentationResults.get_metrics()
+            + MechanicsResults.get_metrics()
         )
     
     @classmethod
@@ -378,6 +479,7 @@ class ChannelResults(ResultsBase):
             + IntensityResults.get_units()
             + FlowResults.get_units()
             + SegmentationResults.get_units()
+            + MechanicsResults.get_units()
         )
     
     def get_physical_units(cls, just_metrics: bool = False) -> List[Units]:
@@ -387,6 +489,7 @@ class ChannelResults(ResultsBase):
             + IntensityResults.get_units()
             + FlowResults.get_units()
             + SegmentationResults.get_units()
+            + MechanicsResults.get_units()
         )
     
     def convert_flags(self) -> str:
@@ -411,6 +514,7 @@ class ChannelResults(ResultsBase):
         data.extend(self.intensity.get_data())
         data.extend(self.flow.get_data())
         data.extend(self.segmentation.get_data())
+        data.extend(self.mechanics.get_data())
         return data
     
     def get_physical_data(self, just_metrics: bool = False) -> List[float]:
@@ -422,6 +526,7 @@ class ChannelResults(ResultsBase):
         data.extend(self.intensity.get_data())
         data.extend(self.flow.get_data())
         data.extend(self.segmentation.get_data())
+        data.extend(self.mechanics.get_data())
         return data
     
     def get_dict_data(self, just_metrics: bool = False) -> dict:
@@ -429,14 +534,15 @@ class ChannelResults(ResultsBase):
         intensity_data = self.intensity.get_dict_data()
         flow_data = self.flow.get_dict_data()
         segmentation_data = self.segmentation.get_dict_data()
+        mechanics_data = self.mechanics.get_dict_data()
         self.total_flags = self.convert_flags()
         if just_metrics:
-            data = binarization_data | intensity_data | flow_data | segmentation_data
+            data = binarization_data | intensity_data | flow_data | segmentation_data | mechanics_data
         else:
             data = {Metrics.FILEPATH: self.filepath,
                     Metrics.CHANNEL: self.channel,
                     Metrics.FLAGS: self.total_flags}
-            data = data | binarization_data | intensity_data | flow_data | segmentation_data
+            data = data | binarization_data | intensity_data | flow_data | segmentation_data | mechanics_data
         return data
     
     def get_physical_dict_data(self, just_metrics: bool = False) -> dict:
@@ -444,14 +550,15 @@ class ChannelResults(ResultsBase):
         intensity_data = self.intensity.get_dict_data()
         flow_data = self.flow.get_dict_data()
         segmentation_data = self.segmentation.get_dict_data()
+        mechanics_data = self.mechanics.get_dict_data()
         self.total_flags = self.convert_flags()
         if just_metrics:
-            data = binarization_data | intensity_data | flow_data | segmentation_data
+            data = binarization_data | intensity_data | flow_data | segmentation_data | mechanics_data
         else:
             data = {Metrics.FILEPATH: self.filepath,
                     Metrics.CHANNEL: self.channel,
                     Metrics.FLAGS: self.total_flags}
-            data = data | binarization_data | intensity_data | flow_data | segmentation_data
+            data = data | binarization_data | intensity_data | flow_data | segmentation_data | mechanics_data
         return data
     
     def to_physical_array(self, **kwargs) -> np.ndarray:
@@ -473,4 +580,3 @@ def sort_channel_results_by_metric(
             return 0.0  # Default for sorting if metric not found
 
     results.sort(key=lambda r: get_metric_value(r, sort_metric))
-

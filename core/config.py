@@ -64,6 +64,7 @@ class InputConfig(BaseConfig):
         Units.LENGTH = self.length_units
         Units.AREA = f"{self.length_units}^2"
         Units.SPEED = f"{self.length_units}/{self.time_units}"
+        Units.INVERSE_LENGTH = f"1/{self.length_units}"
         _length = {"nm": 1e-3, "μm": 1, "mm": 1e3}
         return _length[self.length_units]
     
@@ -161,14 +162,25 @@ class BinarizationConfig(BaseConfig):
 
 @dataclass
 class SegmentationConfig(BaseConfig):
-    """Canny edge detection and closed-contour segmentation settings."""
+    """Interpretable segmentation and mechanics-analysis settings."""
 
+    method: str = "adaptive"
+    model_plugin: str = ""
+    adaptive_block_size: int = 31
+    adaptive_c: float = 5.0
+    invert_mask: bool = False
     canny_low: int = 50
     canny_high: int = 150
     blur_kernel: int = 5
+    open_kernel: int = 3
+    open_iterations: int = 1
     close_kernel: int = 5
     close_iterations: int = 2
     minimum_segment_area: int = 100
+    deformation_method: str = "flow"
+    deformation_window: int = 32
+    strain_type: str = "small"
+    crack_invert_mask: bool = False
     frame_step: int = 10
     percentage_frames_evaluated: float = 0.05
 

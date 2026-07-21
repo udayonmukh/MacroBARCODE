@@ -31,10 +31,15 @@ def run_analysis_pipeline(filepath: str, file: np.ndarray, channel: int, config:
 
     if config.modules.edge_segmentation:
         try:
-            sfig, segmentation_results = analyze_segmentation(
-                video, output_dir, config.segmentation_parameters, config.writer
+            sfig, segmentation_results, mechanics_results = analyze_segmentation(
+                video,
+                output_dir,
+                config.segmentation_parameters,
+                config.reader,
+                config.writer,
             )
             results.segmentation = segmentation_results
+            results.mechanics = mechanics_results
             if sfig and config.writer.save_visualizations:
                 figures.append(sfig)
         except Exception as e:

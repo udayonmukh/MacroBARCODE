@@ -198,22 +198,44 @@ class SegmentationConfigGUI:
     """Auto-generated GUI wrapper for SegmentationConfig"""
     _core_config: SegmentationConfig = field(default_factory=SegmentationConfig)
 
+    method: tk.StringVar = field(init=False)
+    model_plugin: tk.StringVar = field(init=False)
+    adaptive_block_size: tk.IntVar = field(init=False)
+    adaptive_c: tk.DoubleVar = field(init=False)
+    invert_mask: tk.BooleanVar = field(init=False)
     canny_low: tk.IntVar = field(init=False)
     canny_high: tk.IntVar = field(init=False)
     blur_kernel: tk.IntVar = field(init=False)
+    open_kernel: tk.IntVar = field(init=False)
+    open_iterations: tk.IntVar = field(init=False)
     close_kernel: tk.IntVar = field(init=False)
     close_iterations: tk.IntVar = field(init=False)
     minimum_segment_area: tk.IntVar = field(init=False)
+    deformation_method: tk.StringVar = field(init=False)
+    deformation_window: tk.IntVar = field(init=False)
+    strain_type: tk.StringVar = field(init=False)
+    crack_invert_mask: tk.BooleanVar = field(init=False)
     frame_step: tk.IntVar = field(init=False)
     percentage_frames_evaluated: tk.DoubleVar = field(init=False)
 
     def __post_init__(self):
+        self.method = tk.StringVar(value=self._core_config.method)
+        self.model_plugin = tk.StringVar(value=self._core_config.model_plugin)
+        self.adaptive_block_size = tk.IntVar(value=self._core_config.adaptive_block_size)
+        self.adaptive_c = tk.DoubleVar(value=self._core_config.adaptive_c)
+        self.invert_mask = tk.BooleanVar(value=self._core_config.invert_mask)
         self.canny_low = tk.IntVar(value=self._core_config.canny_low)
         self.canny_high = tk.IntVar(value=self._core_config.canny_high)
         self.blur_kernel = tk.IntVar(value=self._core_config.blur_kernel)
+        self.open_kernel = tk.IntVar(value=self._core_config.open_kernel)
+        self.open_iterations = tk.IntVar(value=self._core_config.open_iterations)
         self.close_kernel = tk.IntVar(value=self._core_config.close_kernel)
         self.close_iterations = tk.IntVar(value=self._core_config.close_iterations)
         self.minimum_segment_area = tk.IntVar(value=self._core_config.minimum_segment_area)
+        self.deformation_method = tk.StringVar(value=self._core_config.deformation_method)
+        self.deformation_window = tk.IntVar(value=self._core_config.deformation_window)
+        self.strain_type = tk.StringVar(value=self._core_config.strain_type)
+        self.crack_invert_mask = tk.BooleanVar(value=self._core_config.crack_invert_mask)
         self.frame_step = tk.IntVar(value=self._core_config.frame_step)
         self.percentage_frames_evaluated = tk.DoubleVar(value=self._core_config.percentage_frames_evaluated)
 
@@ -221,12 +243,23 @@ class SegmentationConfigGUI:
     def config(self) -> SegmentationConfig:
         """Get current config from GUI values"""
         return SegmentationConfig(
+            method=self.method.get(),
+            model_plugin=self.model_plugin.get(),
+            adaptive_block_size=self.adaptive_block_size.get(),
+            adaptive_c=self.adaptive_c.get(),
+            invert_mask=self.invert_mask.get(),
             canny_low=self.canny_low.get(),
             canny_high=self.canny_high.get(),
             blur_kernel=self.blur_kernel.get(),
+            open_kernel=self.open_kernel.get(),
+            open_iterations=self.open_iterations.get(),
             close_kernel=self.close_kernel.get(),
             close_iterations=self.close_iterations.get(),
             minimum_segment_area=self.minimum_segment_area.get(),
+            deformation_method=self.deformation_method.get(),
+            deformation_window=self.deformation_window.get(),
+            strain_type=self.strain_type.get(),
+            crack_invert_mask=self.crack_invert_mask.get(),
             frame_step=self.frame_step.get(),
             percentage_frames_evaluated=self.percentage_frames_evaluated.get(),
         )
@@ -234,12 +267,23 @@ class SegmentationConfigGUI:
     def update_gui(self, new_config: SegmentationConfig):
         """Update GUI from new config values"""
         self._core_config = new_config
+        self.method.set(new_config.method)
+        self.model_plugin.set(new_config.model_plugin)
+        self.adaptive_block_size.set(new_config.adaptive_block_size)
+        self.adaptive_c.set(new_config.adaptive_c)
+        self.invert_mask.set(new_config.invert_mask)
         self.canny_low.set(new_config.canny_low)
         self.canny_high.set(new_config.canny_high)
         self.blur_kernel.set(new_config.blur_kernel)
+        self.open_kernel.set(new_config.open_kernel)
+        self.open_iterations.set(new_config.open_iterations)
         self.close_kernel.set(new_config.close_kernel)
         self.close_iterations.set(new_config.close_iterations)
         self.minimum_segment_area.set(new_config.minimum_segment_area)
+        self.deformation_method.set(new_config.deformation_method)
+        self.deformation_window.set(new_config.deformation_window)
+        self.strain_type.set(new_config.strain_type)
+        self.crack_invert_mask.set(new_config.crack_invert_mask)
         self.frame_step.set(new_config.frame_step)
         self.percentage_frames_evaluated.set(new_config.percentage_frames_evaluated)
 
