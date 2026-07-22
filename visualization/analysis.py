@@ -19,6 +19,39 @@ def save_binarization_visualization(original_frame: np.ndarray, binarized_frame:
     plt.close('all')
     return
 
+
+def save_segmentation_visualization(
+    original_frame: np.ndarray,
+    edges: np.ndarray,
+    mask: np.ndarray,
+    frame_idx: int,
+    name: str,
+):
+    fig, axes = plt.subplots(ncols=3, figsize=(15, 5))
+    for axis, data, title in zip(
+        axes, (original_frame, edges, mask), ("Original", "Canny edges", "Segments")
+    ):
+        axis.imshow(data, cmap="gray")
+        axis.set_title(title)
+        axis.axis("off")
+    fig.savefig(os.path.join(name, f"Segmentation Frame {frame_idx} Comparison.png"))
+    plt.close(fig)
+
+
+def save_segmentation_plots(
+    frame_indices: np.ndarray,
+    edge_density: np.ndarray,
+    segmented_area: np.ndarray,
+) -> plt.Figure:
+    fig, ax = plt.subplots(figsize=(7, 7))
+    ax.plot(frame_indices, edge_density, label="Edge density")
+    ax.plot(frame_indices, segmented_area, label="Segmented area")
+    ax.set_xlabel("Frame")
+    ax.set_ylabel("Fraction of field of view")
+    ax.set_ylim(bottom=0)
+    ax.legend()
+    return fig
+
 def save_correlation_visualization(correlation_2d: np.ndarray, frame_idx: int | tuple, name: str, correlation_type: str, downsample: int, um_px_ratio: float):
     m, n = correlation_2d.shape
     img_shape_ratio = n/m

@@ -194,6 +194,15 @@ def create_execution_frame(parent, config: BarcodeConfigGUI, input_config: Input
     create_option_section(
         frame,
         row_idx,
+        cm.edge_segmentation,
+        "Edge Segmentation",
+        "Detect Canny edges, form closed segments, and convert them into BARCODE metrics and optional RDS data.",
+    )
+    row_idx += 2
+
+    create_option_section(
+        frame,
+        row_idx,
         cm.optical_flow,
         "Optical Flow",
         "Evaluate file(s) using Optical Flow branch (will generate a .CSV reduced data structure (RDS) for further analysis).",

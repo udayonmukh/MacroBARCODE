@@ -3,7 +3,7 @@ import traceback
 import matplotlib.pyplot as plt
 import numpy as np
 
-from analysis import analyze_optical_flow, analyze_intensity_distribution, analyze_binarization
+from analysis import analyze_optical_flow, analyze_intensity_distribution, analyze_binarization, analyze_segmentation
 from core import BarcodeConfig, ChannelResults
 from utils import vprint
 
@@ -27,6 +27,26 @@ def run_analysis_pipeline(filepath: str, file: np.ndarray, channel: int, config:
                 log_file.write(traceback.format_exc())
                 log_file.write(
                     f"Channel {channel}, Module: Binarization, Exception: {str(e)}\n"
+                )
+
+    if config.modules.edge_segmentation:
+        try:
+            sfig, segmentation_results, mechanics_results = analyze_segmentation(
+                video,
+                output_dir,
+                config.segmentation_parameters,
+                config.reader,
+                config.writer,
+            )
+            results.segmentation = segmentation_results
+            results.mechanics = mechanics_results
+            if sfig and config.writer.save_visualizations:
+                figures.append(sfig)
+        except Exception as e:
+            with open(fail_file_loc, "a", encoding="utf-8") as log_file:
+                log_file.write(traceback.format_exc())
+                log_file.write(
+                    f"Channel {channel}, Module: Edge Segmentation, Exception: {str(e)}\n"
                 )
 
     # Run optical flow analysis
